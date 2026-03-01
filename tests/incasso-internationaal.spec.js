@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker'
-import { test} from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
-const FILE_PATH = 'files/cowboy.jpeg';
+const FILE_PATH = 'files/fakefile_1KB.txt';
 
 [
   { link: '/incasso-internationaal/', title: 'Incasso-internationaal', clickName: 'Zaak Indienen', clickIndex: 0 },
@@ -12,13 +12,13 @@ const FILE_PATH = 'files/cowboy.jpeg';
   { link: '/serviceovereenkomst-benelux/', title: 'Incasso-serviceovereenkomst-benelux', clickName: 'Indienen', clickIndex: 1 }
 ].forEach((param) => {
   test(param.title, async ({ page }) => {
+  test.setTimeout(120000);
   await page.goto(param.link);
   await page.getByRole('button', { name: 'Allow all' }).click();
   if (param.clickName) await page.getByRole('link', { name: param.clickName }).nth(param.clickIndex).click();
-  await page.reload()
-  await page.getByRole('textbox', { name: 'Uw mailadres*' }).fill(faker.internet.email());
   await page.getByText('Particulier').nth(1).click();
   await page.locator('.close').first().click();
+  await page.getByRole('textbox', { name: 'Uw mailadres*' }).fill(faker.internet.email());
   await page.getByText('Particulier').nth(3).click();
   await page.locator('select[name="type-incasso__1"]').selectOption('Uitspraak huurcommissie');
   await page.locator('select[name="valuta__1"]').selectOption('Dollar (Australië)');
@@ -31,10 +31,12 @@ const FILE_PATH = 'files/cowboy.jpeg';
   await fileInput(3).setInputFiles(FILE_PATH);
   await page.getByRole('button', { name: 'Volgende' }).click();
   await page.waitForTimeout(5000)
+  await page.waitForLoadState('networkidle')
   
   // Step 2
-  await page.getByRole('textbox', { name: 'Bedrijfsnaam*' }).fill(faker.person.firstName);
-  await page.getByRole('textbox', { name: 'Achternaam schuldenaar*' }).fill(faker.person.lastName);
+  await expect(page.getByText('Vul hieronder de gegevens in van degene die u geld is verschuldigd.')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Voornaam schuldenaar*' }).fill(faker.person.firstName());
+  await page.getByRole('textbox', { name: 'Achternaam schuldenaar*' }).fill(faker.person.lastName());
   await page.getByRole('textbox', { name: 'Tussenvoegsel schuldenaar' }).fill("Van Der");
   await page.getByRole('textbox', { name: 'Postcode' }).fill(faker.location.zipCode());
   await page.getByRole('textbox', { name: 'Huisnummer' }).fill(String(faker.number.int({ min: 1, max: 1000 })));
@@ -49,8 +51,10 @@ const FILE_PATH = 'files/cowboy.jpeg';
   await page.waitForTimeout(5000)
 
   // Step 3
-  await page.getByRole('textbox', { name: 'Voornaam schuldenaar*' }).fill(faker.person.firstName());
+  await page.getByRole('textbox', { name: 'Bedrijfsnaam*' }).fill(faker.person.firstName());
+  await page.locator('select[name="rechtsvorm_02"]').selectOption('Besloten vennootschap (bv)');
   await page.getByRole('textbox', { name: 'KvK-nummer' }).fill(faker.string.numeric(8));
+  await page.locator('select[name="maak_uw_keuze_02"]').selectOption('Mevrouw');
   await page.getByRole('textbox', { name: 'Voornaam contactpersoon*' }).fill(faker.person.firstName());
   await page.getByRole('textbox', { name: 'Achternaam contactpersoon' }).fill(faker.person.lastName());
   await page.getByRole('textbox', { name: 'Tussenvoegsel contactpersoon' }).fill(faker.helpers.arrayElement(['van', 'de', 'van der', 'den', 'ter']));
@@ -64,13 +68,24 @@ const FILE_PATH = 'files/cowboy.jpeg';
   await page.getByRole('textbox', { name: 'Mobiel' }).fill('+316' + faker.string.numeric(8));
   await page.getByRole('textbox', { name: 'IBAN-nummer voor terugbetaling vordering*' }).fill(faker.finance.iban());
   await page.getByRole('textbox', { name: 'BTW-nummer*' }).fill('NL' + faker.string.numeric(9) + 'B' + faker.string.numeric(2));
+  await page.getByRole('button', { name: 'Volgende' }).click();
+  await page.waitForTimeout(5000)
 
   // Step 4
   for (let i = 1; i <= 4; i++) {
     await page.locator(`span[data-name="acceptance-${i}"] label`).click();
+    await page.waitForTimeout(500);
   }
-
+  const canvas = page.locator('canvas#wpcf7_signature-last_signature');
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 20, { steps: 20 });
+  await page.mouse.move(box.x + 140, box.y + 50, { steps: 20 });
+  await page.mouse.up();
   await page.getByRole('button', { name: 'Bevestigen' }).click();
+  await page.waitForURL('**/bedankt-voor-uw-aanmelding-particulier/**', { timeout: 30000 });
 
+  await expect(page.getByText('Bedankt voor uw aanmelding! Wij nemen zo snel mogelijk contact met u op. U ontvangt van ons een bevestiging per e-mail.')).toBeVisible();
 })
 })  
